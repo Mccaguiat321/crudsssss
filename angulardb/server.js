@@ -27,7 +27,6 @@ db.connect((err) => {
 });
 
 // Insert user data
-const bcrypt = require('bcrypt'); // Make sure bcrypt is required at the top
 
 app.post('/api/insert', async (req, res) => {
   const { name, age, password } = req.body;
@@ -113,54 +112,36 @@ app.get('/items', (req, res) => {
 
 
 
-app.get("/login", async (req, res) => {
-  const { name, age, password, password_confirm } = req.body;
 
-  // Check if email exists in the database
-  db.query('SELECT email FROM users WHERE email = ?', [email], async (error, result) => {
+
+app.post("/login", (req, res) => {
+  const { name, password } = req.body;
+
+  db.query('SELECT * FROM user WHERE name = ?', [name], async (error, results) => {
     if (error) {
       console.error('Error querying database:', error);
-      return res.status(500).render('register', {
-        message: 'Database error'
-      });
+      return res.status(500).json({ message: 'Database error' });
     }
 
-    if (result.length > 0) {
-      return res.render('register', {
-        message: 'This email is already in use'
-      });
-    } else if (password !== password_confirm) {
-      return res.render('register', {
-        message: 'Passwords do not match!'
-      });
+    if (results.length === 0) {
+      return res.status(401).json({ message: 'User not found' });
     }
 
+    const user = results[0];
+    
     try {
-      // Hash the password
-      let hashedPassword = await bcrypt.hash(password, 8);
+      const match = await bcrypt.compare(password, user.password);
+      if (!match) {
+        return res.status(401).json({ message: 'Incorrect password' });
+      }
 
-      // Insert new user into the database
-      db.query('INSERT INTO users SET ?', { name, email, password: hashedPassword }, (err, results) => {
-        if (err) {
-          console.error('Error inserting user:', err);
-          return res.status(500).render('register', {
-            message: 'Error registering user'
-          });
-        } else {
-          return res.render('register', {
-            message: 'User registered!'
-          });
-        }
-      });
-    } catch (hashError) {
-      console.error('Error hashing password:', hashError);
-      return res.status(500).render('register', {
-        message: 'Error processing registration'
-      });
+      res.json({ message: 'Login successful' });
+    } catch (err) {
+      console.error('Error comparing passwords:', err);
+      res.status(500).json({ message: 'Server error' });
     }
   });
 });
-
 
 // Start the server
 app.listen(port, () => {
